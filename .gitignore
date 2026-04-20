@@ -1,0 +1,13 @@
+set-up/
+subjects/
+references/
+recruitment/
+balance-test/
+PTA/
+*.docx
+*.mat
+*.pptx
+*.pdf
+*.png
+*.jpg
+*.jpeg
