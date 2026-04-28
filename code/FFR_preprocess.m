@@ -8,13 +8,13 @@ close all
 % ft_defaults
 
 %% Set path
-subjectid = 'NG';
+subjectid = 'AM';
 
 % input
 inputpath = fullfile('F:\Auditory-mov-data',subjectid,'eeg');
-name = '_FFR_sit_333';
+%name = '_FFR_sit_333';
 %name = '_FFR_firm_333';
-%name = '_FFR_foam_333';
+name = '_FFR_foam_333';
 inputname = ['P[',subjectid,']',name,'.dat'];
 
 % output
@@ -67,7 +67,7 @@ robust_c = median(var_ch);
 robust_s = mad(var_ch, 1);
 z_var = (var_ch - robust_c) ./ max(robust_s, eps);
 
-bad_var = abs(z_var) > 3;
+bad_var = abs(z_var) > 4;
 
 %%% 2. Flatline detection (very low variance)
 ptp_ch = max(X,[],2) - min(X,[],2);     % peak-to-peak
@@ -86,7 +86,7 @@ robust_mc = median(mean_corr);
 robust_ms = mad(mean_corr, 1);
 z_corr = (mean_corr - robust_mc) ./ max(robust_ms, eps);
 
-bad_corr = z_corr < -3;              % low correlation = bad channel
+bad_corr = z_corr < -4;              % low correlation = bad channel
 
 %%% 4. HF noisiness criterion (PREP)
 % % Ratio of upper-band power (500-900 Hz) to lower-band power (200-500 Hz)
@@ -120,12 +120,7 @@ fprintf('Bad by flatline:  %d channels\n', sum(bad_flat_abs | bad_flat_rel));
 fprintf('Bad by low corr:  %d channels\n', sum(bad_corr));
 %fprintf('Bad by HF noise:  %d channels\n', sum(bad_hf_noise));
 
-%% Bad channel interpolation/ removal
-% Decide: interpolate vs exclude bad channels (based on fraction bad)
-% Set the treshold for discarding vs interpolation ---
-interp_max_frac  = 0.20;   % <= 10% bad -> interpolate (keeps montage consistent)
-exclude_max_frac = 0.25;   % 10-15% bad -> exclude (still salvageable)
-% >20% bad -> stop / mark dataset as poor quality
+%% Visual inspection of bad channels
 
 badlabels = intersect(badlabels, OrigEEGchan);   % only EEG bad channels
 nEEG   = numel(OrigEEGchan);
@@ -150,6 +145,19 @@ cfg.blocksize = 10; % Set the blocksize (number of seconds per window)
 cfg.channel = badlabels; % 'all' or specify channels of interest
 ft_databrowser(cfg, data_bp);
 
+%% Define the badchannels
+badlabels = {'P8','C5','FT7','F2', 'FC5', 'T7'};
+nEEG   = numel(OrigEEGchan);
+nBad   = numel(badlabels);
+badFrac = nBad / max(nEEG,1);
+fprintf('EEG bad channels: %d/%d (%.1f%%)\n', nBad, nEEG, 100*badFrac);
+
+%% Bad channel interpolation/ removal
+% Decide: interpolate vs exclude bad channels (based on fraction bad)
+% Set the treshold for discarding vs interpolation ---
+interp_max_frac  = 0.20;   % <= 10% bad -> interpolate (keeps montage consistent)
+exclude_max_frac = 0.25;   % 10-15% bad -> exclude (still salvageable)
+% >20% bad -> stop / mark dataset as poor quality
 
 % This next part of the code interpolates or rejects the bad channels.
 if nBad == 0

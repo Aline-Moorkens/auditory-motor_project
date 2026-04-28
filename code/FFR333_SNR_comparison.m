@@ -4,23 +4,31 @@ clear
 close all
 
 %% Set parameters
-subjectid = 'NG';
+subjectid = 'LVB';
 
 % input
 inputpath = fullfile('F:\Auditory-mov-data',subjectid,'preprocessed');
 
-nameSit  = '_FFR_sit_333';
+nameSit = '_FFR_sit_333';
 nameFirm = '_FFR_firm_333';
 nameFoam = '_FFR_foam_333';
 
-inputSit  = ['averagedFFR_','P[',subjectid,']',nameSit, '.mat'];
+inputSit = ['averagedFFR_','P[',subjectid,']',nameSit,'.mat'];
 inputFirm = ['averagedFFR_','P[',subjectid,']',nameFirm,'.mat'];
 inputFoam = ['averagedFFR_','P[',subjectid,']',nameFoam,'.mat'];
+
+input_sigchans_sit = ['SigChans_','P[',subjectid,']',nameSit,'.mat'];
+input_sigchans_firm = ['Sigchans_','P[',subjectid,']',nameFirm,'.mat'];
+input_sigchans_foam = ['Sigchans_','P[',subjectid,']',nameFoam,'.mat'];
 
 %% Load data
 load(fullfile(inputpath, inputSit),  'final'); ffr_sit  = final;
 load(fullfile(inputpath, inputFirm), 'final'); ffr_firm = final;
 load(fullfile(inputpath, inputFoam), 'final'); ffr_foam = final;
+
+load(fullfile(inputpath, input_sigchans_sit),  'sigChansBoth'); sigchans_sit  = sigChansBoth;
+load(fullfile(inputpath, input_sigchans_firm), 'sigChansBoth'); sigchans_firm  = sigChansBoth;
+load(fullfile(inputpath, input_sigchans_firm), 'sigChansBoth'); sigchans_foam  = sigChansBoth;
 
 %% Frequency Analysis (Power Spectrum)
 % FFT parameters
@@ -94,6 +102,22 @@ psd_sit  = psd_sit(idx_sit,   :);
 psd_firm = psd_firm(idx_firm,  :);
 psd_foam = psd_foam(idx_foam,  :);
 
+%% Only include channels with significant FFR
+sig_labels = intersect(sigchans_sit, sigchans_firm, 'stable');
+sig_labels = intersect(sig_labels, sigchans_foam,  'stable');
+
+fprintf('Significant channels common to all conditions: %d\n', numel(sig_labels));
+
+% Find indices of common channels in each condition's label list
+idx_sig_sit  = find(ismember(chan_labels, sig_labels));
+idx_sig_firm = find(ismember(chan_labels, sig_labels));
+idx_sig_foam = find(ismember(chan_labels, sig_labels));
+
+% Apply channel selection to PSD matrices
+psd_sig_sit  = psd_sit(idx_sig_sit,:);
+psd_sig_firm = psd_firm(idx_sig_firm,:);
+psd_sig_foam = psd_foam(idx_sig_foam,:);
+
 %% Compute SNR per channel
 % SNR = power in signal band / mean power in noise bands
 % Signal band: 331-335 Hz (around 333 Hz FFR)
@@ -155,6 +179,7 @@ fprintf('Bonferroni-corrected alpha: %.4f\n', alphaBonf);
 
 %% Boxplot visualisation (3 conditions)
 nr_conditions = 3;
+nr_chans = size(snr_sit,1);
 bp = zeros([nr_chans, nr_conditions]);
 bp(:,1) = snr_foam;
 bp(:,2) = snr_firm;
@@ -196,7 +221,7 @@ end
 yStep  = 0.02 * yRange;
 startY = yMax + 0.01 * yRange;
 
-ylim([0, yMax + 4*yStep]);
+ylim([0, yMax + 7*yStep]);
 
 % 1) STAND_FOAM (1) vs STAND_NO_FOAM (2)
 if p_Foam_vs_NoFoam_corr <= alphaBonf

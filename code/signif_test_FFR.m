@@ -4,13 +4,13 @@ clear
 close all
 
 %% Set path
-subjectid = 'NG';
+subjectid = 'LVB';
 
 % input
 inputpath = fullfile('F:\Auditory-mov-data',subjectid,'preprocessed');
-name = '_FFR_sit_333.mat';
-% filename = '_FFR_firm_333.mat';
-% filename = '_FFR_foam_333.mat';
+%name = '_FFR_sit_333.mat';
+%name = '_FFR_firm_333.mat';
+name = '_FFR_foam_333.mat';
 inputname = ['P[',subjectid,']',name];
 
 input = fullfile(inputpath, ['preprocessed_', inputname]);
@@ -88,7 +88,8 @@ e_combined = cat(3, e1, e2_aligned);
 combined_angles = angle(e_combined);
 
 
-%% Rayleigh test (we need the phase/angle in RADIANS for each channel)
+%% Rayleigh test 
+% (we need the phase/angle in RADIANS for each channel)
 addpath('C:\Users\Aline Moorkens\OneDrive - KU Leuven\Documents\CircStat2012a');
 
 % Apply the Rayleigh test per timepoint, over all channels 
@@ -168,3 +169,52 @@ for b = 1:size(test_values,1)
     sgtitle('Rayleigh Test p-values Visualization')
 
 end
+
+
+%% Collect significant channels for both conditions
+alpha = 0.05;  % significance level
+
+% --- Run Rayleigh test for both conditions ---
+conds = {'FFR','minFFR'};
+sigChans = struct();
+
+for ci = 1:numel(conds)
+    which_cond = conds{ci};
+
+    switch which_cond
+        case 'FFR'
+            phase_cond = phase_FFR;    % channels x time x trials
+        case 'minFFR'
+            phase_cond = phase_minFFR; % channels x time x trials
+    end
+
+    % Time window indices
+    ix1 = dsearchn(data.time{1,1}', 0.05);
+    ix2 = dsearchn(data.time{1,1}', 0.21);
+
+    % Compute Rayleigh p-values per channel × time
+    nCh = size(phase_cond,1);
+    nT  = ix2 - ix1 + 1;
+    p_rayleigh = nan(nCh,nT);
+
+    for ch = 1:nCh
+        for ti = 1:nT
+            p_rayleigh(ch,ti) = circ_rtest(squeeze(phase_cond(ch, ix1+ti-1, :)));
+        end
+    end
+
+    % Mark channels as significant if ANY time point passes alpha
+    sig_mask = any(p_rayleigh < alpha, 2);
+    sigChans.(which_cond) = final_phase_data.label(sig_mask);
+end
+
+% --- Find overlap between the two conditions ---
+sigChansBoth = intersect(sigChans.FFR, sigChans.('minFFR'));
+
+
+%% Save significant channel names
+output = fullfile(inputpath, ['SigChans_', inputname]);
+save(output, 'sigChans', 'sigChansBoth');
+fprintf('Saved significant channels to:\n%s\n', output);
+disp('Channels significant in BOTH conditions:');
+disp(sigChansBoth);

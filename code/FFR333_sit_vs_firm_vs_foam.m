@@ -4,7 +4,7 @@ clear
 close all
 
 %% Set parameters
-subjectid = 'NG';
+subjectid = 'LVB';
 
 % input
 inputpath = fullfile('F:\Auditory-mov-data',subjectid,'preprocessed');
@@ -17,10 +17,18 @@ inputSit = ['averagedFFR_','P[',subjectid,']',nameSit,'.mat'];
 inputFirm = ['averagedFFR_','P[',subjectid,']',nameFirm,'.mat'];
 inputFoam = ['averagedFFR_','P[',subjectid,']',nameFoam,'.mat'];
 
+input_sigchans_sit = ['SigChans_','P[',subjectid,']',nameSit,'.mat'];
+input_sigchans_firm = ['Sigchans_','P[',subjectid,']',nameFirm,'.mat'];
+input_sigchans_foam = ['Sigchans_','P[',subjectid,']',nameFoam,'.mat'];
+
 %% Load data
 load(fullfile(inputpath, inputSit),  'final'); ffr_sit  = final;
 load(fullfile(inputpath, inputFirm), 'final'); ffr_firm = final;
 load(fullfile(inputpath, inputFoam), 'final'); ffr_foam = final;
+
+load(fullfile(inputpath, input_sigchans_sit),  'sigChansBoth'); sigchans_sit  = sigChansBoth;
+load(fullfile(inputpath, input_sigchans_firm), 'sigChansBoth'); sigchans_firm  = sigChansBoth;
+load(fullfile(inputpath, input_sigchans_firm), 'sigChansBoth'); sigchans_foam  = sigChansBoth;
 
 %% Frequency Analysis (Power Spectrum)
 % FFT parameters
@@ -28,9 +36,9 @@ fs   = 10000;                       % sampling rate (Hz)
 N    = size(ffr_sit.avg, 2);        % number of samples (from data)
 NFFT = ceil(fs / 2);                % FFT length -> df ≈ 2 Hz
 
-df        = fs / NFFT;                        % frequency resolution (Hz)
-win       = hann(N)';                         % Hann window [1 x N]
-win_power = sum(win .^ 2);                    % window energy correction
+df        = fs/NFFT;                % frequency resolution (Hz)
+win       = hann(N)';               % Hann window [1 x N]
+win_power = sum(win .^ 2);          % window energy correction
 
 % One-sided frequency axis
 freq_vec = (0 : floor(NFFT/2)) * df;          % [1 x (NFFT/2 + 1)] in Hz
@@ -106,16 +114,33 @@ idx_firm = find(ismember(labels_firm, chan_labels));
 idx_foam = find(ismember(labels_foam, chan_labels));
 
 % Apply channel selection to PSD matrices
-psd_sit  = psd_sit(idx_sit,   :);
-psd_firm = psd_firm(idx_firm,  :);
-psd_foam = psd_foam(idx_foam,  :);
+psd_sit  = psd_sit(idx_sit,:);
+psd_firm = psd_firm(idx_firm,:);
+psd_foam = psd_foam(idx_foam,:);
+
+
+%% Only include channels with significant FFR
+sig_labels = intersect(sigchans_sit, sigchans_firm, 'stable');
+sig_labels = intersect(sig_labels, sigchans_foam,  'stable');
+
+fprintf('Significant channels common to all conditions: %d\n', numel(sig_labels));
+
+% Find indices of common channels in each condition's label list
+idx_sig_sit  = find(ismember(chan_labels, sig_labels));
+idx_sig_firm = find(ismember(chan_labels, sig_labels));
+idx_sig_foam = find(ismember(chan_labels, sig_labels));
+
+% Apply channel selection to PSD matrices
+psd_sig_sit  = psd_sit(idx_sig_sit,:);
+psd_sig_firm = psd_firm(idx_sig_firm,:);
+psd_sig_foam = psd_foam(idx_sig_foam,:);
 
 %% Average power across frequency bins within 331-335 Hz
 freq_idx = freq_vec >= 331 & freq_vec <= 335;
 
-pow_sit  = mean(psd_sit( :, freq_idx), 2);   % [nChan x 1]
-pow_firm = mean(psd_firm(:, freq_idx), 2);
-pow_foam = mean(psd_foam(:, freq_idx), 2);
+pow_sit  = mean(psd_sig_sit( :, freq_idx), 2);   % [nChan x 1]
+pow_firm = mean(psd_sig_firm(:, freq_idx), 2);
+pow_foam = mean(psd_sig_foam(:, freq_idx), 2);
 
 
 %% Non-parametric test for 3 related conditions: Friedman test
@@ -168,6 +193,7 @@ fprintf('Bonferroni-corrected alpha: %.4f\n', alphaBonf);
 
 %% Boxplot visualisation (3 conditions)
 nr_conditions = 3;
+nr_chans = size(pow_sit,1);
 bp = zeros([nr_chans, nr_conditions]);
 bp(:,1) = pow_foam;
 bp(:,2) = pow_firm;
@@ -203,7 +229,7 @@ end
 %title(['FFR power comparison [331–335 Hz] (Friedman p ', p_str, ')'])
 title('FFR power comparison [331–335 Hz]')
 ylabel('FFR power')
-ylim([0 0.05])
+%ylim([0 0.05])
 
 hold on
 parallelcoords(bp, 'Color', 0.7*[1 1 1], ...
