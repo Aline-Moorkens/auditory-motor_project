@@ -12,7 +12,7 @@ clear
 close all
 
 %% 1. LOAD DATA
-subjectid = 'NG';
+subjectid = 'LVB';
 
 % input
 inputpath = fullfile('F:\Auditory-mov-data',subjectid,'preprocessed');
@@ -29,7 +29,7 @@ templ_file = 'easycapM11.mat';
 
 %% 2. EXTRACT Fz WAVEFORM AND TIME VECTOR
 % Find Fz channel index
-fz_idx = find(strcmp(final.label, 'Cz'));
+fz_idx = find(strcmp(final.label, 'Fz'));
 if isempty(fz_idx)
     error('Fz channel not found. Check channel labels.');
 end
@@ -46,11 +46,12 @@ t_mask   = time >= t_start & time <= t_end;
 t_plot = time*1000;
 % w_plot   = waveform(t_mask);
 w_plot = waveform;
+
 %% 3. DETECT PEAKS AND TROUGHS IN THE Fz WAVEFORM
 % These correspond to the starred time points in Bidelman Fig 1A
 
 % MinPeakProminence threshold: adjust based on your data amplitude
-min_prom = 0.7 * max(abs(w_plot));   % 10% of max amplitude
+min_prom = 0.8 * max(abs(w_plot));   % 80% of max amplitude
 
 [pos_vals, pos_locs] = findpeaks(w_plot, 'MinPeakProminence', min_prom);
 [neg_vals, neg_locs] = findpeaks(-w_plot, 'MinPeakProminence', min_prom);
@@ -146,8 +147,11 @@ cfg.layout           = templ_file;
 cfg.marker           = 'on';
 cfg.colorbar         = 'yes';
 cfg.zlim             = clim;
-cfg.colormap         = 'RdBu';          % red-blue diverging
-cfg.style            = 'both';          % contour lines + colour fill
+%cfg.colormap         = 'RdBu';          % red-blue diverging
+%cfg.colormap         = 'magma';
+cfg.colormap         = 'plasma';          % red-blue diverging
+%cfg.style            = 'both';          % contour lines + colour fill
+cfg.style            = 'straight';      % colormap only
 cfg.comment          = 'no';
 cfg.title            = '(B)  Positive phase';
 cfg.figure           = ax_pos;

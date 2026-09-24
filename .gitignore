@@ -8,6 +8,5 @@ PTA/
 *.mat
 *.pptx
 *.pdf
-*.png
-*.jpg
-*.jpeg
+*.svg
+*.ai

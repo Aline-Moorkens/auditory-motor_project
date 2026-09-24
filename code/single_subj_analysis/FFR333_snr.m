@@ -4,7 +4,7 @@ clear
 close all
 
 %% Set parameters
-subjectid = 'LVB';
+subjectid = 'NG';
 
 % input
 inputpath = fullfile('F:\Auditory-mov-data',subjectid,'preprocessed');
@@ -17,9 +17,9 @@ inputSit = ['averagedFFR_','P[',subjectid,']',nameSit,'.mat'];
 inputFirm = ['averagedFFR_','P[',subjectid,']',nameFirm,'.mat'];
 inputFoam = ['averagedFFR_','P[',subjectid,']',nameFoam,'.mat'];
 
-input_sigchans_sit = ['SigChans_','P[',subjectid,']',nameSit,'.mat'];
-input_sigchans_firm = ['Sigchans_','P[',subjectid,']',nameFirm,'.mat'];
-input_sigchans_foam = ['Sigchans_','P[',subjectid,']',nameFoam,'.mat'];
+input_sigchans_sit = ['SigChansPadded_','P[',subjectid,']',nameSit,'.mat'];
+input_sigchans_firm = ['SigchansPadded_','P[',subjectid,']',nameFirm,'.mat'];
+input_sigchans_foam = ['SigchansPadded_','P[',subjectid,']',nameFoam,'.mat'];
 
 %% Load data
 load(fullfile(inputpath, inputSit),  'final'); ffr_sit  = final;
@@ -32,59 +32,49 @@ load(fullfile(inputpath, input_sigchans_firm), 'sigChansBoth'); sigchans_foam  =
 
 %% Frequency Analysis (Power Spectrum)
 % FFT parameters
-fs   = 10000;                       % sampling rate (Hz)
-N    = size(ffr_sit.avg, 2);        % number of samples (from data)
-NFFT = ceil(fs / 2);                % FFT length -> df ≈ 2 Hz
+fs   = 10000;
+N    = size(ffr_firm.avg, 2);
+NFFT = ceil(fs / 2);
 
-df        = fs/NFFT;                % frequency resolution (Hz)
-win       = hann(N)';               % Hann window [1 x N]
-win_power = sum(win .^ 2);          % window energy correction
-
-% One-sided frequency axis
-freq_vec = (0 : floor(NFFT/2)) * df;          % [1 x (NFFT/2 + 1)] in Hz
-nFreqs   = numel(freq_vec);
+df        = fs/NFFT;
+freq_vec  = (0 : floor(NFFT/2)) * df;
+nFreqs    = numel(freq_vec);
 
 conditions = {'sit', 'firm', 'foam'};
 data_all   = {ffr_sit, ffr_firm, ffr_foam};
 
-% Preallocate outputs — cell arrays because channel count may differ
 psd_all    = cell(1, 3);
 labels_all = cell(1, 3);
 
 for c = 1:3
-     avg    = data_all{c}.avg;       % [nChan x nSamples]
-     labels = data_all{c}.label;     % {nChan x 1} channel labels
-     nChan  = size(avg, 1);
-     psd_cond = zeros(nChan, nFreqs);
+    avg    = data_all{c}.avg;
+    labels = data_all{c}.label;
+    nChan  = size(avg, 1);
+    %N      = size(avg, 2);
+    
+    win       = hann(N)';
+    win_power = sum(win .^ 2);
+    psd_cond  = zeros(nChan, nFreqs);
 
     for ch = 1:nChan
-        signal = avg(ch, :);        % [1 x N]
+        signal = avg(ch, 1:2500);
 
-        % Step 1: Apply Hann window and compute FFT
         S = fft(signal .* win, NFFT);
-
-        % Step 2: Keep one-sided spectrum
         S = S(1 : floor(NFFT/2) + 1);
 
-        % Step 3: Convert to PSD (µV²/Hz)
         psd_full = (abs(S) .^ 2) / (win_power * fs);
-
-        % Step 4: Double all bins except DC and Nyquist
         psd_full(2:end-1) = 2 * psd_full(2:end-1);
 
-        % Step 5: Store
         psd_cond(ch, 1:numel(psd_full)) = psd_full;
     end
 
     psd_all{c}    = psd_cond;
-    labels_all{c} = labels;         % store channel labels for this condition
+    labels_all{c} = labels;
 
     fprintf('PSD computed: %s | %d channels | %d samples\n', ...
         conditions{c}, nChan, N);
 end
 
-% Unpack back to named variables
-% Unpack to named variables
 psd_sit   = psd_all{1};   labels_sit  = labels_all{1};
 psd_firm  = psd_all{2};   labels_firm = labels_all{2};
 psd_foam  = psd_all{3};   labels_foam = labels_all{3};
@@ -92,32 +82,26 @@ psd_foam  = psd_all{3};   labels_foam = labels_all{3};
 fprintf('Frequency resolution: %.2f Hz\n', df);
 fprintf('Frequency bins: %d\n', nFreqs);
 
-
 %% Channel handling
-% Find channels present in all three conditions
 chan_labels = intersect(labels_sit,  labels_firm, 'stable');
 chan_labels = intersect(chan_labels, labels_foam,  'stable');
 
 fprintf('Channels common to all conditions: %d\n', numel(chan_labels));
 
-% Remove unwanted channels
-chans_to_remove = {'TP9', 'TP10'};     % mastoids used for reference
+chans_to_remove = {'TP9', 'TP10'};
 idx        = ismember(chan_labels, chans_to_remove);
 chan_labels = chan_labels(~idx);
 nr_chans   = numel(chan_labels);
 
 fprintf('Channels after exclusion: %d\n', nr_chans);
 
-% Find indices of common channels in each condition's label list
-idx_sit  = find(ismember(labels_sit,  chan_labels));
-idx_firm = find(ismember(labels_firm, chan_labels));
-idx_foam = find(ismember(labels_foam, chan_labels));
+idx_sit  = ismember(labels_sit,  chan_labels);
+idx_firm = ismember(labels_firm, chan_labels);
+idx_foam = ismember(labels_foam, chan_labels);
 
-% Apply channel selection to PSD matrices
-psd_sit  = psd_sit(idx_sit,:);
-psd_firm = psd_firm(idx_firm,:);
-psd_foam = psd_foam(idx_foam,:);
-
+psd_sit  = psd_sit(idx_sit,   :);   % rows now match chan_labels, in chan_labels order
+psd_firm = psd_firm(idx_firm,  :);
+psd_foam = psd_foam(idx_foam,  :);
 
 %% Only include channels with significant FFR
 sig_labels = intersect(sigchans_sit, sigchans_firm, 'stable');
@@ -125,29 +109,68 @@ sig_labels = intersect(sig_labels, sigchans_foam,  'stable');
 
 fprintf('Significant channels common to all conditions: %d\n', numel(sig_labels));
 
-% Find indices of common channels in each condition's label list
-idx_sig_sit  = find(ismember(chan_labels, sig_labels));
-idx_sig_firm = find(ismember(chan_labels, sig_labels));
-idx_sig_foam = find(ismember(chan_labels, sig_labels));
+% 
+% % Find indices of common channels in each condition's label list
+% idx_sig_sit  = find(ismember(chan_labels, sig_labels));
+% idx_sig_firm = find(ismember(chan_labels, sig_labels));
+% idx_sig_foam = find(ismember(chan_labels, sig_labels));
+% 
+% % Apply channel selection to PSD matrices
+% psd_sig_sit  = psd_sit(idx_sig_sit,:);
+% psd_sig_firm = psd_firm(idx_sig_firm,:);
+% psd_sig_foam = psd_foam(idx_sig_foam,:);
 
-% Apply channel selection to PSD matrices
-psd_sig_sit  = psd_sit(idx_sig_sit,:);
-psd_sig_firm = psd_firm(idx_sig_firm,:);
-psd_sig_foam = psd_foam(idx_sig_foam,:);
+%% Only include vertex channels
+%vertex = {'Fz','Cz','FCz','CPz','C1','C2','FC1','FC2','CP1','CP2'};
+vertex = {'Cz','CPz','C1','C2','FC1','FC2','CP1','CP2'};
+% FIX: combine significance + vertex restriction in ONE step, indexed
+% against chan_labels (which matches the current row order of
+% psd_sit/firm/foam after the reduction above) - not against the
+% original, full-length labels_sit/firm/foam. Indexing against the full
+% list and applying it to the already-reduced psd_sit/firm/foam (as the
+% old code did) pulled out the wrong rows once the row count no longer
+% matched.
+final_labels = intersect(chan_labels, sig_labels, 'stable');
+final_labels = intersect(final_labels, vertex,   'stable');
 
-%% Average power across frequency bins within 331-335 Hz
-freq_idx = freq_vec >= 331 & freq_vec <= 335;
+fprintf('Channels after significance + vertex restriction: %d\n', numel(final_labels));
 
-pow_sit  = mean(psd_sig_sit( :, freq_idx), 2);   % [nChan x 1]
-pow_firm = mean(psd_sig_firm(:, freq_idx), 2);
-pow_foam = mean(psd_sig_foam(:, freq_idx), 2);
+idx_final_sit  = find(ismember(chan_labels, final_labels));
+idx_final_firm = find(ismember(chan_labels, final_labels));
+idx_final_foam = find(ismember(chan_labels, final_labels));
 
+psd_sig_sit  = psd_sit(idx_final_sit,  :);
+psd_sig_firm = psd_firm(idx_final_firm, :);
+psd_sig_foam = psd_foam(idx_final_foam, :);
+
+
+%% Compute SNR per channel
+% SNR = power in signal band / mean power in noise bands
+% Signal band: 331-335 Hz (around 333 Hz FFR)
+% Noise bands: equal-width flanking bands on either side, avoiding the signal
+% Here: [321-325 Hz] and [341-345 Hz] (5 Hz bands, 6 Hz gap from signal)
+
+sig_idx  = freq_vec >= 331 & freq_vec <= 335;
+
+% % Flanking noise bands — same width as signal band
+% noise_lo_idx = freq_vec >= 321 & freq_vec <= 325;
+% noise_hi_idx = freq_vec >= 341 & freq_vec <= 345;
+% noise_idx    = noise_lo_idx | noise_hi_idx;
+
+% Flanking noise bands — same width as signal band
+noise_lo_idx = freq_vec >= 305 & freq_vec <= 325;
+noise_hi_idx = freq_vec >= 341 & freq_vec <= 361;
+noise_idx    = noise_lo_idx | noise_hi_idx;
+
+% SNR = mean signal power / mean noise power (per channel)
+snr_sit  = mean(psd_sig_sit( :, sig_idx), 2) ./ mean(psd_sig_sit( :, noise_idx), 2);
+snr_firm = mean(psd_sig_firm(:, sig_idx), 2) ./ mean(psd_sig_firm(:, noise_idx), 2);
+snr_foam = mean(psd_sig_foam(:, sig_idx), 2) ./ mean(psd_sig_foam(:, noise_idx), 2);
+
+fprintf('SNR computed for %d channels across 3 conditions\n', nr_chans);
 
 %% Non-parametric test for 3 related conditions: Friedman test
-
-% Data matrix: rows = channels (subjects), columns = conditions
-% Order: [STAND_FOAM, STAND_NO_FOAM, SIT] -> choose what makes sense for you
-data = [pow_foam, pow_firm, pow_sit];
+data = [snr_foam, snr_firm, snr_sit];
 
 [p_friedman, tbl_friedman, stats_friedman] = friedman(data, 1, 'off');
 
@@ -156,24 +179,21 @@ disp(p_friedman)
 
 
 %% Post-hoc pairwise comparisons (Wilcoxon signed-rank) + Bonferroni
-
-% Pairwise Wilcoxon (right-tailed, as before)
 [p_Foam_vs_NoFoam, h_Foam_vs_NoFoam, stats_Foam_vs_NoFoam] = ...
-    signrank(pow_foam,   pow_firm, 'tail', 'right');
+    signrank(snr_foam, snr_firm, 'tail', 'right');
 
 [p_Foam_vs_Sit, h_Foam_vs_Sit, stats_Foam_vs_Sit] = ...
-    signrank(pow_foam,   pow_sit,         'tail', 'right');
+    signrank(snr_foam, snr_sit, 'tail', 'right');
 
 [p_NoFoam_vs_Sit, h_NoFoam_vs_Sit, stats_NoFoam_vs_Sit] = ...
-    signrank(pow_firm, pow_sit,         'tail', 'right');
+    signrank(snr_firm, snr_sit, 'tail', 'right');
 
-% Bonferroni correction for 3 pairwise tests
-m = 3;             % number of comparisons
-alpha = 0.05;
+m         = 3;
+alpha     = 0.05;
 alphaBonf = alpha / m;
 
 p_raw  = [p_Foam_vs_NoFoam, p_Foam_vs_Sit, p_NoFoam_vs_Sit];
-p_corr = min(p_raw * m, 1);   % Bonferroni-adjusted p-values
+p_corr = min(p_raw * m, 1);
 
 p_Foam_vs_NoFoam_corr = p_corr(1);
 p_Foam_vs_Sit_corr    = p_corr(2);
@@ -190,78 +210,77 @@ disp(table( ...
 fprintf('Bonferroni-corrected alpha: %.4f\n', alphaBonf);
 
 
+% %% Post-hoc pairwise comparisons
+% % % Paired t-test or Wilcoxin rank test
+% % Check for normality of the data
+% figure()
+% subplot(1,3,1)
+% qqplot(snr_sit)
+% title('Q-Q plot power during sitting')
+% subplot(1,3,2)
+% qqplot(snr_firm)
+% title('Q-Q plot power during standing')
+% subplot(1,3,3)
+% qqplot(snr_foam)
+% title('Q-Q plot power during standing on foam')
+% 
+% % Shapiro_wilk test
+% [H0_sit, psw_sit, W_sit] = swtest(snr_sit, 0.05);
+% [H0_stand, psw_stand, W_stand] = swtest(snr_firm, 0.05);
+% [H0_foam, psw_foam, W_foam] = swtest(snr_foam, 0.05);
+% 
+% % Get p-value with a paired t-test
+% p_Foam_vs_NoFoam = ttest(snr_foam, snr_firm, 'tail', 'right');
+% p_Foam_vs_Sit = ttest(snr_foam, snr_sit, 'tail', 'right');
+% p_NoFoam_vs_Sit = ttest(snr_firm, snr_sit, 'tail', 'right');
+
+
 
 %% Boxplot visualisation (3 conditions)
 nr_conditions = 3;
-nr_chans = size(pow_sit,1);
+nr_chans = size(snr_sit,1);
 bp = zeros([nr_chans, nr_conditions]);
-bp(:,1) = pow_foam;
-bp(:,2) = pow_firm;
-bp(:,3) = pow_sit;
+bp(:,1) = snr_foam;
+bp(:,2) = snr_firm;
+bp(:,3) = snr_sit;
 
 sText = 14;
 figure;
-% Create a boxplot with notches and custom labels
 h = boxplot(bp, 'Notch','off', ...
               'Labels', {'STAND_FOAM','STAND_NO_FOAM','SIT'});
 
-set(gca,'fontsize',sText);
+set(gca,'fontsize', sText);
 set(h,{'linew'},{1});
 
-% Color boxes (findobj returns them in reverse order of plotting)
-c = findobj(gca,'Tag','Box');  % c(1) = last box, etc.
+c = findobj(gca,'Tag','Box');
+patch(get(c(3),'XData'), get(c(3),'YData'), [0.4860 0.6940 0.1680], 'FaceAlpha', .26);
+patch(get(c(2),'XData'), get(c(2),'YData'), [0.9290 0.6940 0.1250], 'FaceAlpha', .26);
+patch(get(c(1),'XData'), get(c(1),'YData'), [0.8500 0.3250 0.0980], 'FaceAlpha', .26);
 
-% Make sure indexing matches 3 conditions:
-% c(1) -> SIT
-% c(2) -> STAND_NO_FOAM
-% c(3) -> STAND_FOAM
-patch(get(c(3),'XData'), get(c(3),'YData'), [0.4860 0.6940 0.1680], 'FaceAlpha', .26); % STAND_FOAM
-patch(get(c(2),'XData'), get(c(2),'YData'), [0.9290 0.6940 0.1250], 'FaceAlpha', .26); % STAND_NO_FOAM
-patch(get(c(1),'XData'), get(c(1),'YData'), [0.8500 0.3250 0.0980], 'FaceAlpha', .26); % SIT
-
-% Choose what to show in title; e.g., global Friedman p-value
 if p_friedman < 0.0001
     p_str = '<0.0001';
 else
     p_str = sprintf('= %.4f', p_friedman);
 end
 
-%title(['FFR power comparison [331–335 Hz] (Friedman p ', p_str, ')'])
-title('FFR power comparison [331–335 Hz]')
-ylabel('FFR power')
-%ylim([0 0.05])
+title('FFR SNR comparison [331–335 Hz]')
+ylabel('FFR SNR (signal power / noise power)')
 
 hold on
 parallelcoords(bp, 'Color', 0.7*[1 1 1], ...
                    'Linestyle', '-', 'Marker', '.', 'Markersize', 7);
 
-%% Significance annotation (Bonferroni-corrected, main axes)
-% y-position settings
+%% Significance annotation (Bonferroni-corrected)
 yMax   = max(bp(:));
 yMin   = min(bp(:));
 yRange = yMax - yMin;
 if yRange == 0
-    yRange = 1; % avoid zero-range issues
+    yRange = 1;
 end
-yStep  = 0.02 * yRange;      % was 0.08
-startY = yMax + 0.01 * yRange;   % was 0.10
+yStep  = 0.02 * yRange;
+startY = yMax + 0.01 * yRange;
 
-% yStep  = 0.08 * yRange;
-% startY = yMax + 0.1 * yRange;
-
-% startY = prctile(bp(:), 97);   % start above highest whisker
-% yStep  = 0.5 * std(bp(:));     % small consistent spacing
-
-
-% Helper to convert p-value to star string (based on corrected p)
-getStars = @(p) ...
-    (p <= 0.001) * "***" + ...
-    (p > 0.001 & p <= 0.01) * "**"  + ...
-    (p > 0.01  & p <= 0.05) * "*"   + ...
-    (p > 0.05) * "";
-
-% IMPORTANT: easier implementation without anonymous trick (MATLAB char handling):
-% We'll just do it explicitly below.
+ylim([0, yMax + 7*yStep]);
 
 % 1) STAND_FOAM (1) vs STAND_NO_FOAM (2)
 if p_Foam_vs_NoFoam_corr <= alphaBonf
@@ -278,13 +297,13 @@ if p_Foam_vs_NoFoam_corr <= alphaBonf
     end
     text(1.5, y1 + 1.1*yStep, stars, ...
         'HorizontalAlignment', 'center', ...
-        'VerticalAlignment', 'bottom', ...
+        'VerticalAlignment',   'bottom', ...
         'FontSize', sText);
 end
 
 % 2) STAND_FOAM (1) vs SIT (3)
 if p_Foam_vs_Sit_corr <= alphaBonf
-    y2 = startY + 1.6*yStep; % a bit higher to avoid overlap
+    y2 = startY + 1.6*yStep;
     plot([1 1 3 3], [y2 y2+yStep y2+yStep y2], 'k-', 'LineWidth', 1);
     if p_Foam_vs_Sit_corr <= 0.001
         stars = '***';
@@ -297,13 +316,13 @@ if p_Foam_vs_Sit_corr <= alphaBonf
     end
     text(2, y2 + 1.1*yStep, stars, ...
         'HorizontalAlignment', 'center', ...
-        'VerticalAlignment', 'bottom', ...
+        'VerticalAlignment',   'bottom', ...
         'FontSize', sText);
 end
 
 % 3) STAND_NO_FOAM (2) vs SIT (3)
 if p_NoFoam_vs_Sit_corr <= alphaBonf
-    y3 = startY + 3.2*yStep; % highest line
+    y3 = startY + 3.2*yStep;
     plot([2 2 3 3], [y3 y3+yStep y3+yStep y3], 'k-', 'LineWidth', 1);
     if p_NoFoam_vs_Sit_corr <= 0.001
         stars = '***';
@@ -316,6 +335,6 @@ if p_NoFoam_vs_Sit_corr <= alphaBonf
     end
     text(2.5, y3 + 1.1*yStep, stars, ...
         'HorizontalAlignment', 'center', ...
-        'VerticalAlignment', 'bottom', ...
+        'VerticalAlignment',   'bottom', ...
         'FontSize', sText);
 end

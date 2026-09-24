@@ -1,4 +1,4 @@
-%% PSD_visualisation.m
+%% PSD_visualisation_vertx.m
 %
 % DESCRIPTION:
 %   Visualises the Frequency-Following Response (FFR) per channel in both

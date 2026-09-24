@@ -4,82 +4,118 @@ clear
 close all
 
 %% Set parameters
-subjectid = 'LVB';
+subjectid = 'AM';
+alpha = 0.05;
+conditions = {'sit','firm','foam'};
 
 % input
-inputpath = fullfile('F:\Auditory-mov-data',subjectid,'preprocessed');
+inputpath = fullfile('F:\Auditory-mov-data\control-no_plate\',subjectid,'preprocessed');
 
-nameSit = '_FFR_sit_333';
+nameSit = '_FFR_sit_2_333';
 nameFirm = '_FFR_firm_333';
 nameFoam = '_FFR_foam_333';
 
-inputSit = ['averagedFFR_','P[',subjectid,']',nameSit,'.mat'];
-inputFirm = ['averagedFFR_','P[',subjectid,']',nameFirm,'.mat'];
-inputFoam = ['averagedFFR_','P[',subjectid,']',nameFoam,'.mat'];
+inputSit = ['preprocessed_','P[',subjectid,']',nameSit,'.mat'];
+inputFirm = ['preprocessed_','P[',subjectid,']',nameFirm,'.mat'];
+inputFoam = ['preprocessed_','P[',subjectid,']',nameFoam,'.mat'];
 
 input_sigchans_sit = ['SigChans_','P[',subjectid,']',nameSit,'.mat'];
 input_sigchans_firm = ['Sigchans_','P[',subjectid,']',nameFirm,'.mat'];
 input_sigchans_foam = ['Sigchans_','P[',subjectid,']',nameFoam,'.mat'];
 
-%% Load data
-load(fullfile(inputpath, inputSit),  'final'); ffr_sit  = final;
-load(fullfile(inputpath, inputFirm), 'final'); ffr_firm = final;
-load(fullfile(inputpath, inputFoam), 'final'); ffr_foam = final;
+%% load trial level data
+
+load(fullfile(inputpath, inputSit),  'data_final'); ffr_sit  = data_final;
+load(fullfile(inputpath, inputFirm), 'data_final'); ffr_firm = data_final;
+load(fullfile(inputpath, inputFoam), 'data_final'); ffr_foam = data_final;
 
 load(fullfile(inputpath, input_sigchans_sit),  'sigChansBoth'); sigchans_sit  = sigChansBoth;
 load(fullfile(inputpath, input_sigchans_firm), 'sigChansBoth'); sigchans_firm  = sigChansBoth;
 load(fullfile(inputpath, input_sigchans_firm), 'sigChansBoth'); sigchans_foam  = sigChansBoth;
 
-%% Frequency Analysis (Power Spectrum)
-% FFT parameters
-fs   = 10000;
-N    = size(ffr_sit.avg, 2);
-NFFT = ceil(fs / 2);
 
-df        = fs / NFFT;
-freq_vec  = (0 : floor(NFFT/2)) * df;
-nFreqs    = numel(freq_vec);
+%% PLV calculation
 
-conditions = {'sit', 'firm', 'foam'};
 data_all   = {ffr_sit, ffr_firm, ffr_foam};
 
-psd_all    = cell(1, 3);
+plv_all    = cell(1, 3);
 labels_all = cell(1, 3);
 
-for c = 1:3
-    avg    = data_all{c}.avg;
+for c = 1:numel(conditions)
+    data   = data_all{c};
     labels = data_all{c}.label;
-    nChan  = size(avg, 1);
-    N      = size(avg, 2);
-    win       = hann(N)';
-    win_power = sum(win .^ 2);
-    psd_cond  = zeros(nChan, nFreqs);
 
-    for ch = 1:nChan
-        signal = avg(ch, :);
+    nchan  = size(data.trial, 1);
+    n_trials = size(data.trial, 2);
+    NFFT = 10000;
+    fs = data.fsample;
+    f0 = 333;
+    toi = [0.050 0.220];   % 20-180 ms post stimulus onset
 
-        S = fft(signal .* win, NFFT);
-        S = S(1 : floor(NFFT/2) + 1);
+    polarity_labels = {'FFR', '-FFR'};   % the two polarity labels to use
+    exclude_labels  = {'notrial'};       % any labels to exclude entirely
 
-        psd_full = (abs(S) .^ 2) / (win_power * fs);
-        psd_full(2:end-1) = 2 * psd_full(2:end-1);
+    % Identify polarities --> see trialinfo
+    % Convert trialinfo to a string array for uniform handling,
+    % whether it came in as cell, char, or string.
+    pol_labels = string(data.trialinfo);
+    
+    % --- Compute PLV per channel, per polarity ---
+    plv_per_pol = zeros(nchan, numel(polarity_labels));
+    n_trials_per_pol = zeros(1, numel(polarity_labels));% Frequency bin index for F0
+    df = fs/NFFT;
+    k_f0 = round(f0/df)+1;
 
-        psd_cond(ch, 1:numel(psd_full)) = psd_full;
-    end
+    for pidx = 1:numel(polarity_labels)
+        pol_str = string(polarity_labels{pidx});
+        trial_mask = (pol_labels == pol_str);
+        n_trials_per_pol(pidx) = sum(trial_mask);
 
-    psd_all{c}    = psd_cond;
-    labels_all{c} = labels;
+         trial_idx = find(trial_mask);
 
-    fprintf('PSD computed: %s | %d channels | %d samples\n', ...
-        conditions{c}, nChan, N);
+         % Per-trial complex FFT coefficient at F0
+         complex_coeffs = zeros(nchan, numel(trial_idx));
+
+         for t = 1:numel(trial_idx)
+             ti = trial_idx(t);
+             tr = data.trial{ti}(ch_idx, :);
+             tt = data.time{ti};
+
+             if ~isempty(toi)
+                 t_mask = tt >= toi(1) & tt <= toi(2);
+                 tr = tr(:, t_mask);
+             end
+
+                F = fft(tr, NFFT, 2);
+                complex_coeffs(:, t) = F(:, k_f0);
+          end
+
+         % PLV per channel = | mean over trials of (z / |z|) |
+         unit_vectors = complex_coeffs ./ abs(complex_coeffs);
+         unit_vectors(isnan(unit_vectors)) = 0;
+         plv_per_pol(:, pidx) = abs(mean(unit_vectors, 2));
+         
+     end
+
+        % Average PLV across polarities (ignoring missing polarities)
+        plv_cond = mean(plv_per_pol, 2, 'omitnan');
+        total_trials = sum(n_trials_per_pol);
+
+        plv_all{c}    = plv_cond;
+        labels_all{c} = labels;
+
+        fprintf('PSD computed: %s | %d channels | %d trials\n', ...
+        conditions{c}, nchan, n_trials);
 end
 
-psd_sit   = psd_all{1};   labels_sit  = labels_all{1};
-psd_firm  = psd_all{2};   labels_firm = labels_all{2};
-psd_foam  = psd_all{3};   labels_foam = labels_all{3};
+
+plv_sit   = plv_all{1};   labels_sit  = labels_all{1};
+plv_firm  = plv_all{2};   labels_firm = labels_all{2};
+plv_foam  = plv_all{3};   labels_foam = labels_all{3};
 
 fprintf('Frequency resolution: %.2f Hz\n', df);
 fprintf('Frequency bins: %d\n', nFreqs);
+
 
 %% Channel handling
 chan_labels = intersect(labels_sit,  labels_firm, 'stable');
@@ -98,9 +134,9 @@ idx_sit  = find(ismember(labels_sit,  chan_labels));
 idx_firm = find(ismember(labels_firm, chan_labels));
 idx_foam = find(ismember(labels_foam, chan_labels));
 
-psd_sit  = psd_sit(idx_sit,   :);
-psd_firm = psd_firm(idx_firm,  :);
-psd_foam = psd_foam(idx_foam,  :);
+plv_sit  = plv_sit(idx_sit,   :);
+plv_firm = plv_firm(idx_firm,  :);
+plv_foam = plv_foam(idx_foam,  :);
 
 %% Only include channels with significant FFR
 sig_labels = intersect(sigchans_sit, sigchans_firm, 'stable');
@@ -114,32 +150,12 @@ idx_sig_firm = find(ismember(chan_labels, sig_labels));
 idx_sig_foam = find(ismember(chan_labels, sig_labels));
 
 % Apply channel selection to PSD matrices
-psd_sig_sit  = psd_sit(idx_sig_sit,:);
-psd_sig_firm = psd_firm(idx_sig_firm,:);
-psd_sig_foam = psd_foam(idx_sig_foam,:);
-
-%% Compute SNR per channel
-% SNR = power in signal band / mean power in noise bands
-% Signal band: 331-335 Hz (around 333 Hz FFR)
-% Noise bands: equal-width flanking bands on either side, avoiding the signal
-% Here: [321-325 Hz] and [341-345 Hz] (5 Hz bands, 6 Hz gap from signal)
-
-sig_idx  = freq_vec >= 331 & freq_vec <= 335;
-
-% Flanking noise bands — same width as signal band
-noise_lo_idx = freq_vec >= 321 & freq_vec <= 325;
-noise_hi_idx = freq_vec >= 341 & freq_vec <= 345;
-noise_idx    = noise_lo_idx | noise_hi_idx;
-
-% SNR = mean signal power / mean noise power (per channel)
-snr_sit  = mean(psd_sit( :, sig_idx), 2) ./ mean(psd_sit( :, noise_idx), 2);
-snr_firm = mean(psd_firm(:, sig_idx), 2) ./ mean(psd_firm(:, noise_idx), 2);
-snr_foam = mean(psd_foam(:, sig_idx), 2) ./ mean(psd_foam(:, noise_idx), 2);
-
-fprintf('SNR computed for %d channels across 3 conditions\n', nr_chans);
+psd_sig_sit  = plv_sit(idx_sig_sit,:);
+psd_sig_firm = plv_firm(idx_sig_firm,:);
+psd_sig_foam = plv_foam(idx_sig_foam,:);
 
 %% Non-parametric test for 3 related conditions: Friedman test
-data = [snr_foam, snr_firm, snr_sit];
+data = [plv_foam, plv_firm, plv_sit];
 
 [p_friedman, tbl_friedman, stats_friedman] = friedman(data, 1, 'off');
 
@@ -148,17 +164,16 @@ disp(p_friedman)
 
 %% Post-hoc pairwise comparisons (Wilcoxon signed-rank) + Bonferroni
 [p_Foam_vs_NoFoam, h_Foam_vs_NoFoam, stats_Foam_vs_NoFoam] = ...
-    signrank(snr_foam, snr_firm, 'tail', 'right');
+    signrank(plv_foam, plv_firm, 'tail', 'right');
 
 [p_Foam_vs_Sit, h_Foam_vs_Sit, stats_Foam_vs_Sit] = ...
-    signrank(snr_foam, snr_sit, 'tail', 'right');
+    signrank(plv_foam, plv_sit, 'tail', 'right');
 
 [p_NoFoam_vs_Sit, h_NoFoam_vs_Sit, stats_NoFoam_vs_Sit] = ...
-    signrank(snr_firm, snr_sit, 'tail', 'right');
+    signrank(plv_firm, plv_sit, 'tail', 'right');
 
-m         = 3;
-alpha     = 0.05;
-alphaBonf = alpha / m;
+m         = numel(conditions);
+alphaBonf = alpha/m;
 
 p_raw  = [p_Foam_vs_NoFoam, p_Foam_vs_Sit, p_NoFoam_vs_Sit];
 p_corr = min(p_raw * m, 1);
@@ -178,12 +193,12 @@ disp(table( ...
 fprintf('Bonferroni-corrected alpha: %.4f\n', alphaBonf);
 
 %% Boxplot visualisation (3 conditions)
-nr_conditions = 3;
-nr_chans = size(snr_sit,1);
+nr_conditions = numel(conditions);
+nr_chans = size(plv_sit,1);
 bp = zeros([nr_chans, nr_conditions]);
-bp(:,1) = snr_foam;
-bp(:,2) = snr_firm;
-bp(:,3) = snr_sit;
+bp(:,1) = plv_foam;
+bp(:,2) = plv_firm;
+bp(:,3) = plv_sit;
 
 sText = 14;
 figure;

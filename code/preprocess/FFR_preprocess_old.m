@@ -3,9 +3,9 @@ clc
 clear
 close all
 
-% restoredefaultpath 
-% addpath 'C:\Users\Aline Moorkens\OneDrive - KU Leuven\Documents\fieldtrip-20250106'
-% ft_defaults
+restoredefaultpath 
+addpath 'C:\Users\Aline Moorkens\OneDrive - KU Leuven\Documents\fieldtrip-20250106'
+ft_defaults
 
 %% Set path
 subjectid = 'AM';
