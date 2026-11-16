@@ -3,9 +3,9 @@ clc
 clear
 close all
 
-% restoredefaultpath 
-% addpath 'C:\Users\Aline Moorkens\OneDrive - KU Leuven\Documents\fieldtrip-20250106'
-% ft_defaults
+restoredefaultpath 
+addpath 'C:\Users\Aline Moorkens\OneDrive - KU Leuven\Documents\fieldtrip-20250106'
+ft_defaults
 
 % Set path
 % subjectid = 'NSMT';
@@ -298,10 +298,10 @@ for i = 2:501
     end
 end
 
-% Trigger 1502: MID marker (already 'notrials')
+% Trigger 502: MID marker (already 'notrials')
  
 % Block 2 (500 trials)
-for i = 502:1003
+for i = 503:1002
     trial_num_in_block = i - 502;  % Trial 1, 2, 3, ... (resets for block 2)
     if mod(trial_num_in_block, 2) == 1
         conditionlabels{i} = 'FFR';   % Odd trials: FFR
@@ -310,7 +310,7 @@ for i = 502:1003
     end
 end
  
-% Trigger 3003: END marker (already 'notrials')
+% Trigger 1003: END marker (already 'notrials')
 
 
 % Assign the trial labels

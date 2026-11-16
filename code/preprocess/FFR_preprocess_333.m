@@ -3,16 +3,18 @@ clc
 clear
 close all
 
-% addpath 'C:\Users\Aline Moorkens\OneDrive - KU Leuven\Documents\fieldtrip-20250106'
-% ft_defaults
+addpath 'C:\Users\Aline Moorkens\OneDrive - KU Leuven\Documents\fieldtrip-20250106'
+ft_defaults
 
-% Set path
+%% Settings
+
+% SubjectID
 
 %%% Batch 1: 333 - 89
 % subjectid = 'NSMT';
 % subjectid = 'AM';
 % subjectid = 'FS';
-subjectid = 'HX';
+% subjectid = 'HX';     % triggers missing in sit_2 file
 % subjectid = 'LVB';
 % subjectid = 'RNR';
 % subjectid = 'VUR';
@@ -23,10 +25,10 @@ subjectid = 'HX';
 % subjectid = 'TH';
 % subjectid = 'TD';
 % subjectid = 'FD'; 
-% subjectid = 'EF';  % triggers missing in sit_2 file
+% subjectid = 'EF';     % triggers missing in sit_2 file
 % subjectid = 'MCBG';
 % subjectid = 'LV';
-% subjectid = 'CX'; % triggers missing in sit_2 file
+% subjectid = 'CX';     % triggers missing in sit_2 file
 % subjectid = 'NG';
 %subjectid = 'BVD';
 
@@ -47,42 +49,49 @@ subjectid = 'HX';
 % subjectid = 'EC';
 % subjectid = 'SP';
 
-% input
-inputpath = fullfile('F:\Auditory-mov-data',subjectid,'eeg');                  % pressure plate data
-%inputpath = fullfile('F:\Auditory-mov-data\control-no_plate',subjectid,'eeg');  % control data without pressure plate
-
+% Postural condition
 %name = '_FFR_sit_333';
 %name = '_FFR_firm_333';
 %name = '_FFR_foam_333';
 name = '_FFR_sit_333_2';
 
-inputname = ['P[',subjectid,']',name,'.dat'];
 
-% output
-basepath = fullfile('F:\Auditory-mov-data',subjectid);                         % pressure plate data
-%basepath = fullfile('F:\Auditory-mov-data\control-no_plate',subjectid);         % control data without pressure plate
-outputpath = fullfile(basepath,'preprocessed');
-outputname = ['P[',subjectid,']',name];
+% Paths
+inputpath  = fullfile('F:\Auditory-mov-data', subjectid, 'eeg');
+basepath   = fullfile('F:\Auditory-mov-data', subjectid);
+inputname  = ['P[', subjectid, ']', name, '.dat'];
 
-% Make sure both folders exist
-if ~exist(outputpath,'dir'), mkdir(outputpath); end
+outputpath = fullfile('F:\Auditory-mov-project\main',subjectid, 'preprocessed');
+outputname = ['P[', subjectid, ']', name];
+if ~exist(outputpath, 'dir'), mkdir(outputpath); end  % make sure folders exist
 
-% layout
+
+logpath = 'C:\Users\Aline Moorkens\OneDrive - KU Leuven\PhD\auditory-motor_project\subjects';
+logfile = fullfile(logpath, sprintf('FFR_preprocessing_333.xlsx'));
+badFile = fullfile(logpath, 'FFR_bad_channels.csv');        % one row per file
+
+% electrode layout
 templ_file = 'easycapM11.mat';
 
 
-% % Load data
+%% Main analysis
+%%% Load data
 cfg            = [];
-cfg.dataset    = fullfile(inputpath,inputname);
+cfg.dataset    = fullfile(inputpath, inputname);
 cfg.continuous = 'yes';
 cfg.channel    = 'all';
 data           = ft_preprocessing(cfg);
 
 OrigEEGchan = ft_channelselection('eeg', data);
-
 fs = data.fsample;
 
-% % Filtering
+% The 1 uV flatline criterion assumes microvolts: print the units once
+if isfield(data, 'hdr') && isfield(data.hdr, 'chanunit')
+    fprintf('Channel units: %s\n', strjoin(unique(data.hdr.chanunit(:))', ', '));
+end
+
+
+%%% Filtering: zero-phase Butterworth band-pass, 200-900 Hz, order 6
 cfg = [];
 cfg.bpfilter  = 'yes';
 cfg.channel   = OrigEEGchan;    % don't filter trigger channel
@@ -93,48 +102,31 @@ cfg.bpfiltdir = 'twopass';     % zero-phase!
 data_bp = ft_preprocessing(cfg, data);
 
 
-% Optional: DFT at 50 Hz or harmonics only if needed
-% Prefer:
-%   - No explicit notch (the band-pass may already suppress 50 Hz), or
-%   - A DFT filter at 50 Hz only if line noise is visible (avoid harmonics in this paradigm).
-% cfg = [];
-% cfg.dftfilter = 'yes';
-% cfg.dftfreq   = [300];             % avoid harmonics like 350
-% data_bp = ft_preprocessing(cfg, data_bp);
+%% Automatic bad-channel detection (FASTER-style, continuous filtered data)
+X = data_bp.trial{1};               % [nChan x nSamples]
 
-
-% Detection of bad channels (FASTER / PREP approach)
-% Quick automatic screening (robust RMS / flatline) (continuous, filtered data)
-%%% 1. Variance (FASTER)
-X = data_bp.trial{1};               % [nChan x nSamples]  
+% 1. Variance, robust z (two-sided)
 var_ch = var(X, 0, 2);              % variance per channel, [nChan x 1]
-
 robust_c = median(var_ch);
 robust_s = mad(var_ch, 1);
 z_var = (var_ch - robust_c) ./ max(robust_s, eps);
-
 bad_var = abs(z_var) > 4;
 
-%%% 2. Flatline detection (very low variance)
-ptp_ch = max(X,[],2) - min(X,[],2);     % peak-to-peak
-ptp_med = median(ptp_ch);
+% 2. Flatline: peak-to-peak < 1 uV or < 2% of the median peak-to-peak
+ptp_ch       = max(X, [], 2) - min(X, [], 2);   % peak-to-peak
+bad_flat_abs = ptp_ch < 1;
+bad_flat_rel = ptp_ch < 0.02 * median(ptp_ch);
 
-bad_flat_abs = ptp_ch < 1;                       % ONLY IF units are µV
-bad_flat_rel = ptp_ch < 0.02 * ptp_med;          % unit-free fallback
 
-%%% 3. correlation (FASTER)
+% 3. Mean correlation with the other channels, robust z < -4
 % Compute pairwise correlations on bandpass-filtered data
 C = corr(X');                         % [nChan x nChan]
 C(logical(eye(size(C)))) = NaN;       % remove self-correlations
 mean_corr = mean(C, 2, 'omitnan');    % mean correlation per channel
-
-robust_mc = median(mean_corr);
-robust_ms = mad(mean_corr, 1);
-z_corr = (mean_corr - robust_mc) ./ max(robust_ms, eps);
-
+z_corr    = (mean_corr - median(mean_corr)) ./ max(mad(mean_corr, 1), eps);
 bad_corr = z_corr < -4;              % low correlation = bad channel
 
-%%% 4. HF noisiness criterion (PREP)
+% 4. HF noisiness criterion (PREP)
 % % Ratio of upper-band power (500-900 Hz) to lower-band power (200-500 Hz)
 % % A noisy channel will have disproportionately high power in the upper band
 % b_low  = fir1(200, [200 500]/(fs/2), 'bandpass');
@@ -155,18 +147,15 @@ bad_corr = z_corr < -4;              % low correlation = bad channel
 % bad_hf_noise = z_noise > 3;
 
 %%% Find the bad channel labels
-bad_idx = find(bad_var | bad_flat_abs | bad_flat_rel|bad_corr);
-%bad_idx = find(bad_var | bad_flat_abs | bad_flat_rel|bad_corr|bad_hf_noise);
-badlabels = data_bp.label(bad_idx);
+bad_idx       = find(bad_var | bad_flat_abs | bad_flat_rel | bad_corr);
+suggested_bad = intersect(data_bp.label(bad_idx), OrigEEGchan);
 
-fprintf('Bad channels flagged: %d/%d\n', numel(badlabels), numel(data_bp.label));
+fprintf('Suggested bad channels: %s\n', strjoin(suggested_bad, ', '));
+fprintf('  by variance: %d | flatline: %d | low correlation: %d\n', ...
+        sum(bad_var), sum(bad_flat_abs | bad_flat_rel), sum(bad_corr));
 
-fprintf('Bad by variance:  %d channels\n', sum(bad_var));
-fprintf('Bad by flatline:  %d channels\n', sum(bad_flat_abs | bad_flat_rel));
-fprintf('Bad by low corr:  %d channels\n', sum(bad_corr));
-%fprintf('Bad by HF noise:  %d channels\n', sum(bad_hf_noise));
 
-% Visual inspection of bad channels
+%%% Visual inspection of bad channels
 
 badlabels = intersect(badlabels, OrigEEGchan);   % only EEG bad channels
 nEEG   = numel(OrigEEGchan);
@@ -277,25 +266,12 @@ end
 cfg = [];
 cfg.reref      = 'yes';
 cfg.refmethod  = 'avg';
+cfg.implicitref = 'FCz';
 cfg.refchannel = {'TP9','TP10'};
 cfg.channel    = 'all';
 data_ref = ft_preprocessing(cfg, data_nobad);
 fprintf('Mastoid (TP9/TP10) reference computed\n');
 
-% --- Version 2: Common Average Reference (CAR) ---
-% cfg = [];
-% cfg.reref       = 'yes';
-% cfg.refmethod   = 'avg';
-% cfg.channel     = 'all';
-% cfg.implicitref = 'FCz';
-% cfg.refchannel  = setdiff(OrigEEGchan, excluded);
-% data_ref_CAR = ft_preprocessing(cfg, data_nobad);
-% fprintf('Common average reference computed\n');
-
-% Loop over both reference schemes
-% ref_versions = {'mastoid', 'CAR'};
-% ref_data     = {data_ref_mastoid, data_ref_CAR};
-% ref_outpaths = {outputpath_mastoid, outputpath_CAR};
 
 % read events once (same for both)
 evt = ft_read_event(fullfile(inputpath,inputname));

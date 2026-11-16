@@ -34,7 +34,7 @@ subjects = {'NG','BVD','FD','EF','CX','HX','MCBG','LV','AM','FS', ...
 nSubj = numel(subjects);
 
 alpha = 0.05;
-basepath = 'F:\Auditory-mov-data\';
+basepath = 'F:\Auditory-mov-project\master-thesis';
 
 % condition keys -> file-name suffixes
 condFileMap = containers.Map({'Sit', 'Firm', 'Foam'}, ...

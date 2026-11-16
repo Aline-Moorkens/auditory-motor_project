@@ -1,9 +1,13 @@
 % Trial def of files with missing triggers
-subjectid = 'HX';
+subjectid = 'EC';
 
 % input
 inputpath = fullfile('F:\Auditory-mov-data\',subjectid,'eeg'); % in case of normal data with pressure plate
-name = '_FFR_sit_333_2';
+name = '_FFR_sit_333';
+name = '_FFR_firm_333';
+name = '_FFR_foam_333';
+% name = '_FFR_sit_333_2';
+
 inputname = ['P[',subjectid,']',name,'.dat'];
 
 % read events once (same for both)
@@ -13,6 +17,13 @@ trig_code = codes{3};
 
 % inspect the triggers
 trig = [evt.sample];
+%trig = trig(2:end); % --> for TH foam_333
+%trig = trig(1:end-2); % --> for RNR sit_333
+%trig = trig(1:end-2); % --> for LM sit_333
+% trig_dummy1 = trig(1:2963); % --> for CB sit_333_2
+% trig_dummy2 = trig(2965:end); % --> for CB sit_333_2
+% trig = [trig_dummy1 trig_dummy2]; % --> for CB sit_333_2
+
 xx = diff(trig);
 plot(xx)
 

@@ -36,7 +36,7 @@ subjects = {'NG','BVD','FD','EF','CX','HX','MCBG','LV','AM','FS', ...
 nSubj = numel(subjects);
 
 alpha = 0.05;
-basepath = 'F:\Auditory-mov-data\';
+basepath = 'F:\Auditory-mov-project\master-thesis\';
 
 % condition keys -> file-name suffixes
 condFileMap = containers.Map({'Sit', 'Firm', 'Foam', 'SitRepeat'}, ...
@@ -379,6 +379,7 @@ set(findobj(fig3, 'Type', 'axes'), 'Color', 'none');
 exportTransparentPNG(fig1, 'SNR_333_spaghetti_full.png', dpi);
 exportTransparentPNG(fig2, 'SNR_333_spaghetti_sitrepeat.png', dpi);
 exportTransparentPNG(fig3, 'SNR_333_spaghetti_sitfirmfoam.png', dpi);
+ 
 
 
 %% Local function: spaghetti plot for one subset of conditions
