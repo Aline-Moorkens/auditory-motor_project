@@ -1,12 +1,12 @@
 % Trial def of files with missing triggers
-subjectid = 'EC';
+subjectid = 'CB';
 
 % input
 inputpath = fullfile('F:\Auditory-mov-data\',subjectid,'eeg'); % in case of normal data with pressure plate
 name = '_FFR_sit_333';
 name = '_FFR_firm_333';
 name = '_FFR_foam_333';
-% name = '_FFR_sit_333_2';
+name = '_FFR_sit_333_2';
 
 inputname = ['P[',subjectid,']',name,'.dat'];
 

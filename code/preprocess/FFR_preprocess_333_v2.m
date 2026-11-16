@@ -41,8 +41,7 @@ ft_defaults
 % subjectid = 'ZB';
 % subjectid = 'CF';     % 1 trigger missing in foam_333
 % subjectid = 'CB';     % 1 trigger missing in sit_333, 4 trig miss block 1
-% & 4 trigg miss block 2 of foam_333 & multiple triggers missing in
-% sit_333_2 plus there is also an extra trigger that needs to be removed
+% & 4 trigg miss block 2 of foam_333 & multiple triggers missing in sit_333_2 plus there is also an extra trigger that needs to be removed
 % subjectid = 'ECM';    % triggers missing in foam_333
 % subjectid = 'ML';     % trigger missing in firm_333
 % subjectid = 'NS';

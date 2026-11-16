@@ -1,0 +1,41 @@
+TRIGGER PROBLEMS FFR 333 HZ
+
+Batch 1: 333 - 89
+subjectid = 'LVB';    % no sit_2 file
+subjectid = 'AM';     
+subjectid = 'TH';     % 1 trigger too many in foam_333 file, skip the first trigger
+subjectid = 'TF';
+subjectid = 'NSMT';   % no sit_2 file
+
+subjectid = 'MGZ';
+subjectid = 'LH';     % no sit_2 file & 1 trigger missing sit_333 file
+subjectid = 'MM';      
+subjectid = 'FS';     
+subjectid = 'TD';
+subjectid = 'RNR';    % 2 triggers too many at end of sit_333 file
+subjectid = 'HX';     % multiple triggers missing in sit_2 file & 1 trigger missing in foam_333 file
+subjectid = 'VUR';
+subjectid = 'FD'; 
+subjectid = 'EF';     % 4 consecutive triggers missing in sit_2 file (block 1)
+subjectid = 'MCBG';
+subjectid = 'LV';     % no sit_2 file
+subjectid = 'CX';     % 4 triggers missing in sit_2 file
+subjectid = 'NG';
+subjectid = 'BVD';
+
+Batch 2: 333 - 433
+subjectid = 'RR';     % no sit_2 file & 4 triggers missing in foam file
+subjectid = 'AF';     % multiple triggers missing in sit_2 file
+subjectid = 'LM';     % 2 triggers too many at end of sit_333 file; 1 trigger missing in foam_333
+subjectid = 'ZB';
+subjectid = 'CF';     % 1 trigger missing in foam_333
+subjectid = 'CB';     % 1 trigger missing in sit_333, 4 trig miss block 1 & 4 trigg miss block 2 of foam_333 & multiple triggers missing in sit_333_2 plus there is also an extra trigger that needs to be removed
+subjectid = 'ECM';    % triggers missing in foam_333
+subjectid = 'ML';     % trigger missing in firm_333
+subjectid = 'NS';
+subjectid = 'TM';
+subjectid = 'LPB';
+subjectid = 'SK';
+subjectid = 'SG';
+subjectid = 'SP';     % triggers missing in foam_333
+subjectid = 'EC';     % sit_2a and sit_2b recording here instead of 1 sit_2 recording (both are approx 1500 trials long)
